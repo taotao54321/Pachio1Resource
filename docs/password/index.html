@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>目指せパチプロ パチ夫くん (FC) 攻略/解析 - パスワード</title>
+
+    <link rel="stylesheet" href="../asset/css/main.css">
+    <style>
+        table.char-table td {
+            text-align: center;
+        }
+        span.altch {
+            color: #808080;
+        }
+    </style>
+</head>
+<body>
+
+<header><a href="../">目指せパチプロ パチ夫くん (FC) 攻略/解析</a></header>
+
+<h1>パスワード</h1>
+
+<p>本作はパスワードを用いてゲーム状態のセーブ/ロードを行う。パスワードは 16 文字で、1 文字あたりの情報量は 6-bit である。よって、パスワード全体の情報量は 96-bit である。</p>
+
+<p>パスワードは RAM <code>$56-$65</code> に置かれる (この領域はセーブ/ロード時の中間バッファや生年月日バッファとしても使われる)。ゲーム状態とパスワードの相互変換は以下のルーチンで行われる:</p>
+
+<table>
+<thead>
+    <tr><th>アドレス</th><th>内容</th></tr></thead>
+<tbody>
+    <tr><td><code>$EECC</code></td><td>ゲーム状態をパスワードにセーブする。</td></tr>
+    <tr><td><code>$F028</code></td><td>ゲーム状態をパスワードからロードすることを試みる。</td></tr>
+</tbody>
+</table>
+
+<p>なお、一部のパスワードはデバッグメニューを起動する裏技パスワードとして扱われる(後述)。</p>
+
+<p>筆者作のパスワードライブラリ <a href="https://github.com/taotao54321/pachio1_password">pachio1_password</a> も適宜参照されたい (パスワードのセーブ/ロードおよび裏技パスワードの探索を実装している)。</p>
+
+<h2 id="state">ゲーム状態</h2>
+
+<p>パスワードには以下の情報が記録される ("bits" はパスワード内での情報量で、計 96-bit):</p>
+
+<table>
+<thead>
+    <tr><th>識別子</th><th>アドレス</th><th>bits</th><th>内容</th></tr>
+</thead>
+<tbody>
+    <tr>
+        <td><code>fortune</code></td>
+        <td><code>$4A</code></td>
+        <td style="text-align: right;">6</td>
+        <td>運命数 (通常は 1〜6)。最後の店 (じょい) をクリアした際の性格分析メッセージに影響する。</td>
+    </tr>
+    <tr>
+        <td><code>score</code></td>
+        <td><code>$4B-$4D</code></td>
+        <td style="text-align: right;">24</td>
+        <td>得点 (6 桁 packed BCD, リトルエンディアン)。エクステンドや成績評価に影響する。</td>
+    </tr>
+    <tr>
+        <td><code>total_win</code></td>
+        <td><code>$4E</code></td>
+        <td style="text-align: right;">8</td>
+        <td>総打ち止め回数。成績評価に影響する。</td>
+    </tr>
+    <tr>
+        <td><code>stage_win</code></td>
+        <td><code>$4F</code></td>
+        <td style="text-align: right;">6</td>
+        <td>現在の面における打ち止め回数。規定回数に達すると面クリア可能となる。面クリア時に総打ち止め回数に加算される。</td>
+    </tr>
+    <tr>
+        <td><code>gameover</code></td>
+        <td><code>$50</code></td>
+        <td style="text-align: right;">7</td>
+        <td>ゲームオーバーになってコンティニューした回数。成績評価に影響する。</td>
+    </tr>
+    <tr>
+        <td><code>stage</code></td>
+        <td><code>$51</code></td>
+        <td style="text-align: right;">3</td>
+        <td>現在の面 (通常は 1〜7)。</td>
+    </tr>
+    <tr>
+        <td><code>hand_ball</code></td>
+        <td><code>$52-$54</code></td>
+        <td style="text-align: right;">24</td>
+        <td>持ち玉 (6 桁 packed BCD, リトルエンディアン)。</td>
+    </tr>
+    <tr>
+        <td><code>life</code></td>
+        <td><code>$55</code></td>
+        <td style="text-align: right;">3</td>
+        <td>残機 (プレイ中の自機を含まない。通常は 0〜5)。</td>
+    </tr>
+    <tr>
+        <td><code>key</code></td>
+        <td></td>
+        <td style="text-align: right;">6</td>
+        <td>暗号鍵。乱数により生成される。</td>
+    </tr>
+    <tr>
+        <td><code>check</code></td>
+        <td></td>
+        <td style="text-align: right;">9</td>
+        <td>チェックコード。これが正しくないとロードが失敗する。</td>
+    </tr>
+</tbody>
+</table>
+
+<h2 id="char">パスワード文字</h2>
+
+<p>パスワードとして入力可能な文字は全部で 90 種あるが、正規のパスワード内に現れる文字は 64 種のみであり、残りの 26 種はロード時に特定の正規の文字と同等に扱われる。前者 64 種を「正規文字」、後者 26 種を「代替文字」と呼ぶ。</p>
+
+<p>パスワード文字コード表 (RAM <code>$56-$65</code> 上の値) を以下に示す。色の薄いものは代替文字で、対応する正規文字を付記している。なお、"SP" は空白を意味する:</p>
+
+<table class="char-table">
+<thead>
+    <tr><th></th><th>x0</th><th>x1</th><th>x2</th><th>x3</th><th>x4</th><th>x5</th><th>x6</th><th>x7</th><th>x8</th><th>x9</th><th>xA</th><th>xB</th><th>xC</th><th>xD</th><th>xE</th><th>xF</th></tr>
+</thead>
+<tbody>
+    <tr><th>2x</th><td><span class="altch">SP</span>(わ)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>3x</th><td><span class="altch">０</span>(ぶ)</td><td><span class="altch">１</span>(べ)</td><td><span class="altch">２</span>(ぼ)</td><td><span class="altch">３</span>(ぱ)</td><td><span class="altch">４</span>(ぴ)</td><td><span class="altch">５</span>(ぷ)</td><td><span class="altch">６</span>(ぺ)</td><td><span class="altch">７</span>(ぽ)</td><td><span class="altch">８</span>(あ)</td><td><span class="altch">９</span>(い)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>4x</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>5x</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>6x</th><td></td><td>が</td><td>ぎ</td><td>ぐ</td><td>げ</td><td>ご</td><td>ざ</td><td>じ</td><td>ず</td><td>ぜ</td><td>ぞ</td><td>だ</td><td><span class="altch">ぢ</span>(で)</td><td><span class="altch">づ</span>(ど)</td><td>で</td><td>ど</td></tr>
+    <tr><th>7x</th><td>ば</td><td>び</td><td>ぶ</td><td>べ</td><td>ぼ</td><td>ぱ</td><td>ぴ</td><td>ぷ</td><td>ぺ</td><td>ぽ</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>8x</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>9x</th><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><th>Ax</th><td></td><td><span class="altch">。</span>(ろ)</td><td><span class="altch">「</span>(わ)</td><td><span class="altch">」</span>(が)</td><td><span class="altch">、</span>(ぎ)</td><td></td><td><span class="altch">を</span>(げ)</td><td></td><td></td><td></td><td></td><td></td><td><span class="altch">ゃ</span>(ぞ)</td><td><span class="altch">ゅ</span>(だ)</td><td><span class="altch">ょ</span>(で)</td><td><span class="altch">っ</span>(ど)</td></tr>
+    <tr><th>Bx</th><td></td><td>あ</td><td>い</td><td>う</td><td>え</td><td><span class="altch">お</span>(か)</td><td>か</td><td>き</td><td>く</td><td>け</td><td>こ</td><td>さ</td><td>し</td><td>す</td><td>せ</td><td>そ</td></tr>
+    <tr><th>Cx</th><td>た</td><td>ち</td><td>つ</td><td>て</td><td>と</td><td>な</td><td>に</td><td><span class="altch">ぬ</span>(の)</td><td><span class="altch">ね</span>(は)</td><td>の</td><td>は</td><td>ひ</td><td>ふ</td><td>へ</td><td>ほ</td><td>ま</td></tr>
+    <tr><th>Dx</th><td>み</td><td>む</td><td>め</td><td>も</td><td>や</td><td>ゆ</td><td>よ</td><td>ら</td><td>り</td><td>る</td><td>れ</td><td>ろ</td><td>わ</td><td><span class="altch">ん</span>(が)</td><td></td><td></td></tr>
+</tbody>
+</table>
+
+
+<h2 id="save">パスワードへのセーブ処理</h2>
+
+<p>パスワードに記録すべき情報を格納したバイト列を「セーブデータ」と呼ぶ。セーブデータは形式によらず 16 バイトで、RAM <code>$56-$65</code> 上で in-place に読み書きされる。</p>
+
+<p>ゲーム状態は以下のステップを経てパスワードに変換される:</p>
+
+<ul>
+    <li>ゲーム状態を 8-bit 形式セーブデータに変換する。これは各バイトが 8-bit の情報量を持つ配列である。</li>
+    <li>8-bit 形式セーブデータを 6-bit 形式セーブデータに変換する。これは各バイトが 6-bit の情報量を持つ配列である。</li>
+    <li>6-bit 形式セーブデータをパスワードにエンコードする。</li>
+</ul>
+
+<h3 id="state-to-save8">ゲーム状態から 8-bit 形式セーブデータへの変換</h3>
+
+<p>まずゼロクリアされた 16 バイトの配列 <code>bytes</code> を用意する。今後、これをセーブデータ(形式不問)操作用バッファとして用いる。</p>
+
+<p>事前に乱数を用いて 6-bit の暗号鍵を生成しておく。そして、<code>bytes</code> 内にゲーム状態および暗号鍵を以下のように詰め込む (ビット列は MSB-first で各バイトに詰め込まれる。たとえば、<code>fortune</code> は <code>bytes[1]</code> の bit2-7 に入る。なお、空欄は全て 0 である)。ここで、<code>check_lo</code> はチェックコード bit0-7, <code>h</code> はチェックコード bit8 の格納予定地だが、この時点ではまだ 0 で埋められている:</p>
+
+<pre class="example"><code class="example"> 0                   1                   2
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   check_lo    |  fortune  |   score[0]    |   score[1]    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+ 3                   4                   5                   6
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   score[2]    |   total_win   | stage_win |  gameover   |stage|
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+ 6               7                   8                   9
+ 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| hand_ball[0]  | hand_ball[1]  | hand_ball[2]  |life |h|           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+         1                   1                   1
+ 9       0                   1                   2
+ 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                   |    key    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</code></pre>
+
+<p>次に 9-bit のチェックコードを求め、結果を <code>check_lo</code> および <code>h</code> の部分に格納する。チェックコード計算処理はたとえば Rust では以下のように書ける (過程全体を通じて <code>u16</code> の下位 9-bit 以外は無視してよい):</p>
+
+<pre class="example"><code class="example">fn calc_check(bytes: [u8; 16]) -&gt; u16 {
+    let key = bytes[15];
+
+    let mut check: u16 = 0;
+
+    for b in bytes.into_iter().rev() {
+        check = check.wrapping_add(u16::from(key));
+        check ^= u16::from(b);
+        check &lt;&lt;= 1;
+        if check &amp; (1 &lt;&lt; 8) == 0 {
+            check ^= 0x79
+        }
+    }
+
+    check &amp; 0x1FF
+}
+</code></pre>
+
+<p>最後に <code>bytes</code> に対して簡単なスクランブル処理を施し、その結果が 8-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[1..=10]</code> の各バイトに <code>bytes[0]</code> (<code>check_lo</code>) を加算するものであり、たとえば Rust では以下のように書ける:</p>
+
+<pre class="example"><code class="example">fn scramble8(bytes: &amp;mut [u8; 16]) {
+    let check_lo = bytes[0];
+
+    for b in bytes[1..=10].iter_mut() {
+        *b = b.wrapping_add(check_lo);
+    }
+}
+</code></pre>
+
+<h3 id="save8-to-save6">8-bit 形式セーブデータから 6-bit 形式セーブデータへの変換</h3>
+
+<p>8-bit 形式セーブデータにおいて、<code>bytes[0..=11]</code> の各バイトは上位 2-bit に何らかの情報を持っている。これらを以下のように <code>bytes[11..=14]</code> へ移動し、<code>bytes</code> 内の全てのバイトの情報量を 6-bit にする。ここで、<code>hi2(x)</code> は <code>x &gt;&gt; 6</code> を意味する:</p>
+
+<ul>
+    <li><code>bytes[11]</code> bit0-5 に <code>hi2(bytes[0]) | (hi2(bytes[1]) &lt;&lt; 2) | (hi2(bytes[2]) &lt;&lt; 4)</code> を格納する。</li>
+    <li><code>bytes[12]</code> bit0-5 に <code>hi2(bytes[3]) | (hi2(bytes[4]) &lt;&lt; 2) | (hi2(bytes[5]) &lt;&lt; 4)</code> を格納する。</li>
+    <li><code>bytes[13]</code> bit0-5 に <code>hi2(bytes[6]) | (hi2(bytes[7]) &lt;&lt; 2) | (hi2(bytes[8]) &lt;&lt; 4)</code> を格納する。</li>
+    <li><code>bytes[14]</code> bit0-5 に <code>hi2(bytes[9]) | (hi2(bytes[10]) &lt;&lt; 2) | (hi2(bytes[11]) &lt;&lt; 4)</code> を格納する。</li>
+</ul>
+
+<p>次に、<code>bytes</code> に対して暗号鍵に依存するスクランブル処理を施し、その結果が 6-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[0..=14]</code> の各バイトに対して暗号鍵の下位 2-bit に依存するバイト列を XOR するものであり、たとえば Rust では以下のように書ける:</p>
+
+<pre class="example"><code class="example">fn scramble(bytes: &amp;mut [u8; 16]) {
+    const TABLE: [[u8; 15]; 4] = [
+        [0x16, 0x03, 0x1A, 0x17, 0x09, 0x12, 0x1A, 0x17, 0x10, 0x03, 0x1A, 0x04, 0x1A, 0x01, 0x09],
+        [0x32, 0x1B, 0x2D, 0x12, 0x32, 0x1B, 0x2D, 0x12, 0x31, 0x1B, 0x2D, 0x22, 0x00, 0x2B, 0x2D],
+        [0x0D, 0x12, 0x1B, 0x1B, 0x31, 0x2D, 0x19, 0x01, 0x15, 0x08, 0x1F, 0x15, 0x28, 0x32, 0x2E],
+        [0x07, 0x09, 0x07, 0x0A, 0x0D, 0x34, 0x0D, 0x14, 0x27, 0x28, 0x2C, 0x2F, 0x3E, 0x36, 0x1F],
+    ];
+
+    let xor_array = &amp;TABLE[usize::from(bytes[15] &amp; 3)];
+
+    for (b, &amp;xor) in bytes[..15].iter_mut().zip(xor_array) {
+        *b = (*b ^ xor) &amp; 0x3F;
+    }
+}
+</code></pre>
+
+<p>なお、このスクランブル処理は対称な操作 (2 回行うと元に戻る) なので、逆変換時も全く同じことを行えばよい。</p>
+
+<h3 id="save6-to-password">6-bit 形式セーブデータからパスワードへのエンコード</h3>
+
+<p>6-bit 形式セーブデータ内の各バイト (上位 2-bit は 0 とする) を以下の規則で正規文字に変換したものがパスワードとなる:</p>
+
+<pre class="example"><code class="example">0x00..=0x03 =&gt; 0xB1..=0xB4 ('あ'..='え')
+0x04..=0x14 =&gt; 0xB6..=0xC6 ('か'..='に')
+0x15..=0x28 =&gt; 0xC9..=0xDC ('の'..='わ')
+0x29..=0x33 =&gt; 0x61..=0x6B ('が'..='だ')
+0x34..=0x3F =&gt; 0x6E..=0x79 ('で'..='ぽ')
+</code></pre>
+
+<h2 id="load">パスワードからのロード処理</h2>
+
+<p>ロード処理は基本的にはセーブ処理の逆を行うだけである。つまり、パスワードは以下のステップを経てゲーム状態に変換される:</p>
+
+<ul>
+    <li>パスワードを 6-bit 形式セーブデータにデコードする。</li>
+    <li>6-bit 形式セーブデータを 8-bit 形式セーブデータに変換する。</li>
+    <li>8-bit 形式セーブデータをゲーム状態に変換する。</li>
+</ul>
+
+<h3 id="password-to-save6">パスワードから 6-bit 形式セーブデータへのデコード</h3>
+
+<p>基本的には<a href="#save6-to-password">セーブ時の処理</a>の逆を行うだけである。代替文字は対応する正規文字と等価に扱われる (<a href="#char">文字コード表</a>を参照)。</p>
+
+<h3 id="save6-to-save8">6-bit 形式セーブデータから 8-bit 形式セーブデータへの変換</h3>
+
+<p><a href="#save8-to-save6">セーブ時の処理</a>の逆を行うだけである。</p>
+
+<h3 id="save8-to-state">8-bit 形式セーブデータからゲーム状態への変換</h3>
+
+<p>基本的には<a href="#state-to-save8">セーブ時の処理</a>の逆を行うだけである。チェックコードが正しくない場合、不正なパスワードとみなされてロードは失敗する。</p>
+
+<p>なお、ゲーム状態に関する値域チェックは行われないので、不正な値をロードさせることもできる。たとえば以下のような現象が確認されている:</p>
+
+<ul>
+    <li>運命数を 1〜6 の範囲外にすると、最後の店をクリアした際の性格分析メッセージがバグる。</li>
+    <li>現在の面を 0 にすると、入店シーンのパレットがバグり、入店時にフリーズ (おそらく無限ループ) する。</li>
+</ul>
+
+<p>暗号鍵とチェックコードを除いた<a href="#state">ゲーム状態</a>が全てゼロクリアされているようなパスワードは裏技パスワードである。裏技パスワードをロードすると以下のようなデバッグメニューが起動し、ゲーム状態を編集した上でプレイを開始できる:</p>
+
+<img src="DebugMenu.webp" alt="デバッグメニュー">
+
+<p>デバッグメニュー内の「れべる」は現在の面、「パチ夫」は残機、「すっちゃった」はゲームオーバー回数を意味する。なお、デバッグメニューにおいては運命数/現在の面/残機に対する値域チェックが行われており、値が不正だとプレイを開始できない。</p>
+
+<p>裏技パスワードは正規文字の範囲では 64 種存在する(暗号鍵に依存)が、このうち「かまととぶりつこみいはあぷろぐれ」(カマトト ぶりっ子 ミーハー プログレ) が開発者の意図したパスワードと思われる。代替文字も許した裏技パスワードは <a href="CheatPasswords.txt.xz">27482 種存在する</a>が、上記以外に意味ありげな文字列は見当たらなかった。</p>
+
+</body>
+</html>
