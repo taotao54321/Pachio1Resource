@@ -224,7 +224,7 @@
 
 <p>次に、<code>bytes</code> に対して暗号鍵に依存するスクランブル処理を施し、その結果が 6-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[0..=14]</code> の各バイトに対して暗号鍵の下位 2-bit に依存するバイト列を XOR するものであり、たとえば Rust では以下のように書ける:</p>
 
-<pre class="example"><code class="example">fn scramble(bytes: &amp;mut [u8; 16]) {
+<pre class="example"><code class="example">fn scramble6(bytes: &amp;mut [u8; 16]) {
     const TABLE: [[u8; 15]; 4] = [
         [0x16, 0x03, 0x1A, 0x17, 0x09, 0x12, 0x1A, 0x17, 0x10, 0x03, 0x1A, 0x04, 0x1A, 0x01, 0x09],
         [0x32, 0x1B, 0x2D, 0x12, 0x32, 0x1B, 0x2D, 0x12, 0x31, 0x1B, 0x2D, 0x22, 0x00, 0x2B, 0x2D],
