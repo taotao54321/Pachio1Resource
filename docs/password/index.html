@@ -10,7 +10,8 @@
             text-align: center;
         }
         span.altch {
-            color: #808080;
+            font-style: italic;
+            color: #0B7285;
         }
     </style>
 </head>
@@ -20,7 +21,7 @@
 
 <h1>パスワード</h1>
 
-<p>本作はパスワードを用いてゲーム状態のセーブ/ロードを行う。パスワードは 16 文字で、1 文字あたりの情報量は 6-bit である。よって、パスワード全体の情報量は 96-bit である。</p>
+<p>本作は 16 文字のパスワードを用いてゲーム状態のセーブ/ロードを行う。ゲーム内で生成される正規のパスワードの場合、64 種の文字が使われるため、1 文字あたりの情報量は 6 ビットで、全体の情報量は 96 ビットとなる。ただし、正規でない文字も考慮するとパスワードの情報量は 96 ビットよりわずかに多くなる(後述)。</p>
 
 <p>パスワードは RAM <code>$56-$65</code> に置かれる (この領域はセーブ/ロード時の中間バッファや生年月日バッファとしても使われる)。ゲーム状態とパスワードの相互変換は以下のルーチンで行われる:</p>
 
@@ -35,11 +36,11 @@
 
 <p>なお、一部のパスワードはデバッグメニューを起動する裏技パスワードとして扱われる(後述)。</p>
 
-<p>筆者作のパスワードライブラリ <a href="https://github.com/taotao54321/pachio1_password">pachio1_password</a> も適宜参照されたい (パスワードのセーブ/ロードおよび裏技パスワードの探索を実装している)。</p>
+<p>筆者作のパスワードライブラリ <a href="https://github.com/taotao54321/pachio1_password">pachio1_password</a> も適宜参照されたい (パスワードのセーブ/ロードおよび裏技パスワード/最短パスワードの探索を実装している)。</p>
 
 <h2 id="state">ゲーム状態</h2>
 
-<p>パスワードには以下の情報が記録される ("bits" はパスワード内での情報量で、計 96-bit):</p>
+<p>パスワードには以下の情報が記録される ("bits" はパスワード内での情報量):</p>
 
 <table>
 <thead>
@@ -97,8 +98,8 @@
     <tr>
         <td><code>key</code></td>
         <td></td>
-        <td style="text-align: right;">6</td>
-        <td>暗号鍵。乱数により生成される。</td>
+        <td></td>
+        <td>暗号鍵。セーブ時は 0〜0x3F の乱数となるが、ロード時は正規でない文字を入力することでそれ以外の値にもできる。よって、情報量は 6 ビットよりわずかに多くなる。</td>
     </tr>
     <tr>
         <td><code>check</code></td>
@@ -111,9 +112,9 @@
 
 <h2 id="char">パスワード文字</h2>
 
-<p>パスワードとして入力可能な文字は全部で 90 種あるが、正規のパスワード内に現れる文字は 64 種のみであり、残りの 26 種はロード時に特定の正規の文字と同等に扱われる。前者 64 種を「正規文字」、後者 26 種を「代替文字」と呼ぶ。</p>
+<p>パスワードとして入力可能な文字は全部で 90 種あるが、正規のパスワード内に現れる文字は 64 種のみである。これらを「正規文字」、残りの 26 種を「代替文字」と呼ぶ。代替文字は基本的には対応する正規文字と同等に扱われるが、パスワードの末尾に現れた場合のみ扱いが異なる(後述)。</p>
 
-<p>パスワード文字コード表 (RAM <code>$56-$65</code> 上の値) を以下に示す。色の薄いものは代替文字で、対応する正規文字を付記している。なお、"SP" は空白を意味する:</p>
+<p>パスワード文字コード表 (RAM <code>$56-$65</code> 上の値) を以下に示す。代替文字については斜体で表示し、対応する正規文字を付記している。なお、"SP" は空白を意味する:</p>
 
 <table class="char-table">
 <thead>
@@ -135,7 +136,6 @@
 </tbody>
 </table>
 
-
 <h2 id="save">パスワードへのセーブ処理</h2>
 
 <p>パスワードに記録すべき情報を格納したバイト列を「セーブデータ」と呼ぶ。セーブデータは形式によらず 16 バイトで、RAM <code>$56-$65</code> 上で in-place に読み書きされる。</p>
@@ -143,8 +143,8 @@
 <p>ゲーム状態は以下のステップを経てパスワードに変換される:</p>
 
 <ul>
-    <li>ゲーム状態を 8-bit 形式セーブデータに変換する。これは各バイトが 8-bit の情報量を持つ配列である。</li>
-    <li>8-bit 形式セーブデータを 6-bit 形式セーブデータに変換する。これは各バイトが 6-bit の情報量を持つ配列である。</li>
+    <li>ゲーム状態を 8-bit 形式セーブデータに変換する。これは各バイトが 8 ビットの情報量を持つ配列である。</li>
+    <li>8-bit 形式セーブデータを 6-bit 形式セーブデータに変換する。これは基本的には各バイトが 6 ビットの情報量を持つ配列である (ロード時は末尾バイトのみ扱いが特殊)。</li>
     <li>6-bit 形式セーブデータをパスワードにエンコードする。</li>
 </ul>
 
@@ -152,7 +152,7 @@
 
 <p>まずゼロクリアされた 16 バイトの配列 <code>bytes</code> を用意する。今後、これをセーブデータ(形式不問)操作用バッファとして用いる。</p>
 
-<p>事前に乱数を用いて 6-bit の暗号鍵を生成しておく。そして、<code>bytes</code> 内にゲーム状態および暗号鍵を以下のように詰め込む (ビット列は MSB-first で各バイトに詰め込まれる。たとえば、<code>fortune</code> は <code>bytes[1]</code> の bit2-7 に入る。なお、空欄は全て 0 である)。ここで、<code>check_lo</code> はチェックコード bit0-7, <code>h</code> はチェックコード bit8 の格納予定地だが、この時点ではまだ 0 で埋められている:</p>
+<p>事前に乱数を用いて 6 ビットの暗号鍵を生成しておく。そして、<code>bytes</code> 内にゲーム状態および暗号鍵を以下のように詰め込む (ビット列は MSB-first で各バイトに詰め込まれる。たとえば、<code>fortune</code> は <code>bytes[1]</code> の bit2-7 に入る。なお、空欄は全て 0 である)。ここで、<code>check_lo</code> はチェックコード bit0-7, <code>h</code> はチェックコード bit8 の格納予定地だが、この時点ではまだ 0 で埋められている:</p>
 
 <pre class="example"><code class="example"> 0                   1                   2
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
@@ -180,7 +180,7 @@
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 </code></pre>
 
-<p>次に 9-bit のチェックコードを求め、結果を <code>check_lo</code> および <code>h</code> の部分に格納する。チェックコード計算処理はたとえば Rust では以下のように書ける (過程全体を通じて <code>u16</code> の下位 9-bit 以外は無視してよい):</p>
+<p>次に 9 ビットのチェックコードを求め、結果を <code>check_lo</code> および <code>h</code> の部分に格納する。チェックコード計算処理はたとえば Rust では以下のように書ける (暗号鍵に依存することに注意。なお、過程全体を通じて <code>check</code> の下位 9 ビット以外は無視してよい):</p>
 
 <pre class="example"><code class="example">fn calc_check(bytes: [u8; 16]) -&gt; u16 {
     let key = bytes[15];
@@ -192,7 +192,7 @@
         check ^= u16::from(b);
         check &lt;&lt;= 1;
         if check &amp; (1 &lt;&lt; 8) == 0 {
-            check ^= 0x79
+            check ^= 0x79;
         }
     }
 
@@ -200,7 +200,7 @@
 }
 </code></pre>
 
-<p>最後に <code>bytes</code> に対して簡単なスクランブル処理を施し、その結果が 8-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[1..=10]</code> の各バイトに <code>bytes[0]</code> (<code>check_lo</code>) を加算するものであり、たとえば Rust では以下のように書ける:</p>
+<p>最後に <code>bytes</code> に対して簡単なスクランブル処理を施し、その結果が 8-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[1..=10]</code> の各バイトに <code>bytes[0]</code> (<code>check_lo</code>) を加算するものである (間接的に暗号鍵に依存していることに注意)。たとえば Rust では以下のように書ける:</p>
 
 <pre class="example"><code class="example">fn scramble8(bytes: &amp;mut [u8; 16]) {
     let check_lo = bytes[0];
@@ -213,7 +213,7 @@
 
 <h3 id="save8-to-save6">8-bit 形式セーブデータから 6-bit 形式セーブデータへの変換</h3>
 
-<p>8-bit 形式セーブデータにおいて、<code>bytes[0..=11]</code> の各バイトは上位 2-bit に何らかの情報を持っている。これらを以下のように <code>bytes[11..=14]</code> へ移動し、<code>bytes</code> 内の全てのバイトの情報量を 6-bit にする。ここで、<code>hi2(x)</code> は <code>x &gt;&gt; 6</code> を意味する:</p>
+<p>8-bit 形式セーブデータにおいて、<code>bytes[0..=11]</code> の各バイトは上位 2 ビットに何らかの情報を持っている。これらを以下のように <code>bytes[11..=14]</code> へ移動し、<code>bytes</code> 内の全てのバイトの情報量を 6 ビットにする。ここで、<code>hi2(x)</code> は <code>x &gt;&gt; 6</code> を意味する:</p>
 
 <ul>
     <li><code>bytes[11]</code> bit0-5 に <code>hi2(bytes[0]) | (hi2(bytes[1]) &lt;&lt; 2) | (hi2(bytes[2]) &lt;&lt; 4)</code> を格納する。</li>
@@ -222,7 +222,7 @@
     <li><code>bytes[14]</code> bit0-5 に <code>hi2(bytes[9]) | (hi2(bytes[10]) &lt;&lt; 2) | (hi2(bytes[11]) &lt;&lt; 4)</code> を格納する。</li>
 </ul>
 
-<p>次に、<code>bytes</code> に対して暗号鍵に依存するスクランブル処理を施し、その結果が 6-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[0..=14]</code> の各バイトに対して暗号鍵の下位 2-bit に依存するバイト列を XOR するものであり、たとえば Rust では以下のように書ける:</p>
+<p>次に、<code>bytes</code> に対して暗号鍵に依存するスクランブル処理を施し、その結果が 6-bit 形式セーブデータとなる。スクランブル処理は <code>bytes[0..=14]</code> の各バイトに対して暗号鍵の下位 2 ビットに依存するバイト列を XOR するものである。たとえば Rust では以下のように書ける:</p>
 
 <pre class="example"><code class="example">fn scramble6(bytes: &amp;mut [u8; 16]) {
     const TABLE: [[u8; 15]; 4] = [
@@ -232,7 +232,8 @@
         [0x07, 0x09, 0x07, 0x0A, 0x0D, 0x34, 0x0D, 0x14, 0x27, 0x28, 0x2C, 0x2F, 0x3E, 0x36, 0x1F],
     ];
 
-    let xor_array = &amp;TABLE[usize::from(bytes[15] &amp; 3)];
+    let key = bytes[15];
+    let xor_array = &amp;TABLE[usize::from(key &amp; 3)];
 
     for (b, &amp;xor) in bytes[..15].iter_mut().zip(xor_array) {
         *b = (*b ^ xor) &amp; 0x3F;
@@ -244,7 +245,7 @@
 
 <h3 id="save6-to-password">6-bit 形式セーブデータからパスワードへのエンコード</h3>
 
-<p>6-bit 形式セーブデータ内の各バイト (上位 2-bit は 0 とする) を以下の規則で正規文字に変換したものがパスワードとなる:</p>
+<p>6-bit 形式セーブデータ内の各バイト (上位 2 ビットは 0 とする) を以下の規則で正規文字に変換したものがパスワードとなる:</p>
 
 <pre class="example"><code class="example">0x00..=0x03 =&gt; 0xB1..=0xB4 ('あ'..='え')
 0x04..=0x14 =&gt; 0xB6..=0xC6 ('か'..='に')
@@ -265,7 +266,37 @@
 
 <h3 id="password-to-save6">パスワードから 6-bit 形式セーブデータへのデコード</h3>
 
-<p>基本的には<a href="#save6-to-password">セーブ時の処理</a>の逆を行うだけである。代替文字は対応する正規文字と等価に扱われる (<a href="#char">文字コード表</a>を参照)。</p>
+<p>基本的には<a href="#save6-to-password">セーブ時の処理</a>の逆を行うだけだが、ロード時は代替文字が現れうることに注意を要する。</p>
+
+<p>代替文字はパスワードの末尾以外では対応する正規文字と等価に扱われ(<a href="#char">文字コード表</a>を参照)、パスワードの末尾においては以下の規則でデコードされる (表中にないものは対応する正規文字と等価に扱う):</p>
+
+<table>
+<thead>
+    <tr><th>文字</th><th>バイト</th></tr>
+</thead>
+<tbody>
+    <tr><td>。</td><td>0x67</td></tr>
+    <tr><td>「</td><td>0x68</td></tr>
+    <tr><td>」</td><td>0x69</td></tr>
+    <tr><td>、</td><td>0x6A</td></tr>
+    <tr><td>を</td><td>0x6C</td></tr>
+    <tr><td>ゃ</td><td>0x72</td></tr>
+    <tr><td>ゅ</td><td>0x73</td></tr>
+    <tr><td>ょ</td><td>0x74</td></tr>
+    <tr><td>っ</td><td>0x75</td></tr>
+    <tr><td>(空白)</td><td>0xE8</td></tr>
+    <tr><td>０</td><td>0xF8</td></tr>
+    <tr><td>１</td><td>0xF9</td></tr>
+    <tr><td>２</td><td>0xFA</td></tr>
+    <tr><td>３</td><td>0xFB</td></tr>
+    <tr><td>４</td><td>0xFC</td></tr>
+    <tr><td>５</td><td>0xFD</td></tr>
+    <tr><td>６</td><td>0xFE</td></tr>
+    <tr><td>７</td><td>0xFF</td></tr>
+</tbody>
+</table>
+
+<p>セーブデータの末尾バイトは暗号鍵なので、代替文字を用いると 0〜0x3F 以外の暗号鍵も指定可能ということになる。そのため、パスワード全体の情報量は 96 ビットよりわずかに多くなる。</p>
 
 <h3 id="save6-to-save8">6-bit 形式セーブデータから 8-bit 形式セーブデータへの変換</h3>
 
@@ -273,7 +304,7 @@
 
 <h3 id="save8-to-state">8-bit 形式セーブデータからゲーム状態への変換</h3>
 
-<p>基本的には<a href="#state-to-save8">セーブ時の処理</a>の逆を行うだけである。チェックコードが正しくない場合、不正なパスワードとみなされてロードは失敗する。</p>
+<p>基本的には<a href="#state-to-save8">セーブ時の処理</a>の逆を行うだけである。チェックコードが正しくない場合、不正なパスワードとみなされてロードは失敗する (チェックコードは暗号鍵に依存することに注意)。</p>
 
 <p>なお、ゲーム状態に関する値域チェックは行われないので、不正な値をロードさせることもできる。たとえば以下のような現象が確認されている:</p>
 
@@ -282,17 +313,73 @@
     <li>現在の面を 0 にすると、入店シーンのパレットがバグり、入店時にフリーズ (おそらく無限ループ) する。</li>
 </ul>
 
-<p>暗号鍵とチェックコードを除いた<a href="#state">ゲーム状態</a>が全てゼロクリアされているようなパスワードは裏技パスワードである。裏技パスワードをロードすると以下のようなデバッグメニューが起動し、ゲーム状態を編集した上でプレイを開始できる:</p>
+<h2 id="cheat">裏技パスワード</h2>
+
+<p>パスワードのロードに成功し、かつその結果の<a href="#state">ゲーム状態</a> (暗号鍵とチェックコードを除く) が全てゼロクリアされている場合、それは裏技パスワードとして扱われる。</p>
+
+<p>裏技パスワードをロードすると以下のようなデバッグメニューが起動し、ゲーム状態を編集した上でプレイを開始できる:</p>
 
 <img src="DebugMenu.webp" alt="デバッグメニュー">
 
 <p>デバッグメニュー内の「れべる」は現在の面、「パチ夫」は残機、「すっちゃった」はゲームオーバー回数を意味する。なお、デバッグメニューにおいては運命数/現在の面/残機に対する値域チェックが行われており、値が不正だとプレイを開始できない。</p>
 
-<p>裏技パスワードは正規文字の範囲では 64 種存在する(暗号鍵に依存)が、このうち「かまととぶりつこみいはあぷろぐれ」(カマトト ぶりっ子 ミーハー プログレ) が開発者の意図したパスワードと思われる。代替文字も許した裏技パスワードは <a href="CheatPasswords.txt.xz">27482 種存在する</a>が、上記以外に意味ありげな文字列は見当たらなかった。</p>
+<p>裏技パスワードは正規文字の範囲では 64 種存在する(暗号鍵に依存)が、このうち「かまととぶりつこみいはあぷろぐれ」(カマトト ぶりっ子 ミーハー プログレ) が開発者の意図したパスワードと思われる。代替文字も許した裏技パスワードは <a href="CheatPasswords.txt.xz">23504 種存在する</a>が、上記以外に意味ありげな文字列は見当たらなかった。</p>
 
 <p>ちなみに、続編の『パチ夫くん2』には上記の裏技パスワードを喋るNPCが存在する (どりーむ店などに出現):</p>
 
 <img src="Pachio2-Kamatoto.webp" alt="パチ夫くん2で前作の裏技パスワードを喋るNPC in ドリーム店">
+
+<h2 id="shortest">最短パスワード</h2>
+
+<p>ロード可能なパスワードは最短で 2 文字 (3 文字目以降は空白) であり、全部で 30 種存在する。一覧を以下に示す。なお、暗号鍵は全て 0xE8 である (<a href="#password-to-save6">デコード処理</a>を参照):</p>
+
+<table>
+<thead>
+    <tr>
+        <th>パスワード</th>
+        <th><code>fortune</code></th>
+        <th><code>score</code></th>
+        <th><code>total_win</code></th>
+        <th><code>stage_win</code></th>
+        <th><code>gameover</code></th>
+        <th><code>stage</code></th>
+        <th><code>hand_ball</code></th>
+        <th><code>life</code></th>
+    </tr>
+</thead>
+<tbody>
+    <tr><td>３う</td><td style="text-align: right;">37</td><td style="text-align: right;">0xBD6421</td><td style="text-align: right;">51</td><td style="text-align: right;">20</td><td style="text-align: right;">44</td><td style="text-align: right;">4</td><td style="text-align: right;">0x81CFA2</td><td style="text-align: right;">3</td></tr>
+    <tr><td>５ふ</td><td style="text-align: right;">44</td><td style="text-align: right;">0x3DE521</td><td style="text-align: right;">179</td><td style="text-align: right;">52</td><td style="text-align: right;">60</td><td style="text-align: right;">5</td><td style="text-align: right;">0x015023</td><td style="text-align: right;">7</td></tr>
+    <tr><td>７ら</td><td style="text-align: right;">45</td><td style="text-align: right;">0xBE65E2</td><td style="text-align: right;">52</td><td style="text-align: right;">20</td><td style="text-align: right;">76</td><td style="text-align: right;">5</td><td style="text-align: right;">0x82D0A3</td><td style="text-align: right;">3</td></tr>
+    <tr><td>ごが</td><td style="text-align: right;">43</td><td style="text-align: right;">0x39E1DD</td><td style="text-align: right;">175</td><td style="text-align: right;">51</td><td style="text-align: right;">60</td><td style="text-align: right;">1</td><td style="text-align: right;">0x3D4C1F</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ご」</td><td style="text-align: right;">43</td><td style="text-align: right;">0x39E1DD</td><td style="text-align: right;">175</td><td style="text-align: right;">51</td><td style="text-align: right;">60</td><td style="text-align: right;">1</td><td style="text-align: right;">0x3D4C1F</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ごん</td><td style="text-align: right;">43</td><td style="text-align: right;">0x39E1DD</td><td style="text-align: right;">175</td><td style="text-align: right;">51</td><td style="text-align: right;">60</td><td style="text-align: right;">1</td><td style="text-align: right;">0x3D4C1F</td><td style="text-align: right;">7</td></tr>
+    <tr><td>だと</td><td style="text-align: right;">43</td><td style="text-align: right;">0xBF6623</td><td style="text-align: right;">53</td><td style="text-align: right;">20</td><td style="text-align: right;">108</td><td style="text-align: right;">6</td><td style="text-align: right;">0x83D1A4</td><td style="text-align: right;">3</td></tr>
+    <tr><td>ぱう</td><td style="text-align: right;">37</td><td style="text-align: right;">0xBD6421</td><td style="text-align: right;">51</td><td style="text-align: right;">20</td><td style="text-align: right;">44</td><td style="text-align: right;">4</td><td style="text-align: right;">0x81CFA2</td><td style="text-align: right;">3</td></tr>
+    <tr><td>ぷふ</td><td style="text-align: right;">44</td><td style="text-align: right;">0x3DE521</td><td style="text-align: right;">179</td><td style="text-align: right;">52</td><td style="text-align: right;">60</td><td style="text-align: right;">5</td><td style="text-align: right;">0x015023</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ぽら</td><td style="text-align: right;">45</td><td style="text-align: right;">0xBE65E2</td><td style="text-align: right;">52</td><td style="text-align: right;">20</td><td style="text-align: right;">76</td><td style="text-align: right;">5</td><td style="text-align: right;">0x82D0A3</td><td style="text-align: right;">3</td></tr>
+    <tr><td>。４</td><td style="text-align: right;">51</td><td style="text-align: right;">0xBC63A0</td><td style="text-align: right;">50</td><td style="text-align: right;">20</td><td style="text-align: right;">12</td><td style="text-align: right;">3</td><td style="text-align: right;">0x80CEA1</td><td style="text-align: right;">3</td></tr>
+    <tr><td>。ぴ</td><td style="text-align: right;">51</td><td style="text-align: right;">0xBC63A0</td><td style="text-align: right;">50</td><td style="text-align: right;">20</td><td style="text-align: right;">12</td><td style="text-align: right;">3</td><td style="text-align: right;">0x80CEA1</td><td style="text-align: right;">3</td></tr>
+    <tr><td>ゅと</td><td style="text-align: right;">43</td><td style="text-align: right;">0xBF6623</td><td style="text-align: right;">53</td><td style="text-align: right;">20</td><td style="text-align: right;">108</td><td style="text-align: right;">6</td><td style="text-align: right;">0x83D1A4</td><td style="text-align: right;">3</td></tr>
+    <tr><td>けづ</td><td style="text-align: right;">57</td><td style="text-align: right;">0x846B68</td><td style="text-align: right;">58</td><td style="text-align: right;">22</td><td style="text-align: right;">13</td><td style="text-align: right;">3</td><td style="text-align: right;">0x88D6A9</td><td style="text-align: right;">3</td></tr>
+    <tr><td>けど</td><td style="text-align: right;">57</td><td style="text-align: right;">0x846B68</td><td style="text-align: right;">58</td><td style="text-align: right;">22</td><td style="text-align: right;">13</td><td style="text-align: right;">3</td><td style="text-align: right;">0x88D6A9</td><td style="text-align: right;">3</td></tr>
+    <tr><td>けっ</td><td style="text-align: right;">57</td><td style="text-align: right;">0x846B68</td><td style="text-align: right;">58</td><td style="text-align: right;">22</td><td style="text-align: right;">13</td><td style="text-align: right;">3</td><td style="text-align: right;">0x88D6A9</td><td style="text-align: right;">3</td></tr>
+    <tr><td>さた</td><td style="text-align: right;">43</td><td style="text-align: right;">0x00E8A4</td><td style="text-align: right;">182</td><td style="text-align: right;">53</td><td style="text-align: right;">29</td><td style="text-align: right;">0</td><td style="text-align: right;">0x045326</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ちる</td><td style="text-align: right;">51</td><td style="text-align: right;">0x826966</td><td style="text-align: right;">56</td><td style="text-align: right;">21</td><td style="text-align: right;">77</td><td style="text-align: right;">1</td><td style="text-align: right;">0x86D4A7</td><td style="text-align: right;">3</td></tr>
+    <tr><td>てれ</td><td style="text-align: right;">55</td><td style="text-align: right;">0x06EEAA</td><td style="text-align: right;">188</td><td style="text-align: right;">54</td><td style="text-align: right;">93</td><td style="text-align: right;">6</td><td style="text-align: right;">0x0A592C</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ぬぢ</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ぬで</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ぬょ</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>のぢ</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ので</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>のょ</td><td style="text-align: right;">61</td><td style="text-align: right;">0x07EF2B</td><td style="text-align: right;">189</td><td style="text-align: right;">54</td><td style="text-align: right;">125</td><td style="text-align: right;">7</td><td style="text-align: right;">0x0B5A2D</td><td style="text-align: right;">7</td></tr>
+    <tr><td>むが</td><td style="text-align: right;">55</td><td style="text-align: right;">0x05EDE9</td><td style="text-align: right;">187</td><td style="text-align: right;">54</td><td style="text-align: right;">61</td><td style="text-align: right;">5</td><td style="text-align: right;">0x09582B</td><td style="text-align: right;">7</td></tr>
+    <tr><td>む」</td><td style="text-align: right;">55</td><td style="text-align: right;">0x05EDE9</td><td style="text-align: right;">187</td><td style="text-align: right;">54</td><td style="text-align: right;">61</td><td style="text-align: right;">5</td><td style="text-align: right;">0x09582B</td><td style="text-align: right;">7</td></tr>
+    <tr><td>むん</td><td style="text-align: right;">55</td><td style="text-align: right;">0x05EDE9</td><td style="text-align: right;">187</td><td style="text-align: right;">54</td><td style="text-align: right;">61</td><td style="text-align: right;">5</td><td style="text-align: right;">0x09582B</td><td style="text-align: right;">7</td></tr>
+    <tr><td>ろ４</td><td style="text-align: right;">51</td><td style="text-align: right;">0xBC63A0</td><td style="text-align: right;">50</td><td style="text-align: right;">20</td><td style="text-align: right;">12</td><td style="text-align: right;">3</td><td style="text-align: right;">0x80CEA1</td><td style="text-align: right;">3</td></tr>
+    <tr><td>ろぴ</td><td style="text-align: right;">51</td><td style="text-align: right;">0xBC63A0</td><td style="text-align: right;">50</td><td style="text-align: right;">20</td><td style="text-align: right;">12</td><td style="text-align: right;">3</td><td style="text-align: right;">0x80CEA1</td><td style="text-align: right;">3</td></tr>
+</tbody>
+</table>
 
 </body>
 </html>
